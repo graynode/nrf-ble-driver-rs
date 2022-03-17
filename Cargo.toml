@@ -1,0 +1,15 @@
+[package]
+name = "nrf-sd-api"
+version = "0.1.0"
+authors = ["Matt <matt@graynode.net>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1.52"
+
+[build-dependencies] 
+bindgen = "0.59.2"
