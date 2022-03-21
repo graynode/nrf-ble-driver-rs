@@ -2,7 +2,7 @@ extern crate bindgen;
 
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -37,8 +37,9 @@ fn ble_driver_file() -> String {
     return format!("{}-{}-{}.{}", FILE_PREFIX, VERSION, FILE_SUFFIX, FILE_EXT);
 }
 
-fn ble_driver_root_dir() -> String {
-    return format!("{}/{}", env::var("OUT_DIR").unwrap(), ble_driver_folder());
+fn ble_driver_root_dir() -> PathBuf {
+    let path: PathBuf = [env::var("OUT_DIR").unwrap(), ble_driver_folder()].iter().collect();
+    return path;
 }
 
 fn ble_driver_folder() -> String {
@@ -49,14 +50,16 @@ fn main() {
     get_nordic_ble_driver();
     extract_ble_driver();
 
-    
-    println!("cargo:rustc-link-search=native={}/lib", ble_driver_root_dir());
+    let lib_folder = String::from(ble_driver_root_dir().join("lib").to_str().unwrap());
+    let inc_folder = String::from(ble_driver_root_dir().join("include").to_str().unwrap());
+
+    println!("cargo:rustc-link-search=native={lib_folder}");
     println!("cargo:rustc-link-lib=nrf-ble-driver-sd_api_v5");
 
     println!("cargo:rerun-if-changed=wrapper.h");
 
     let bindings = bindgen::Builder::default()
-        .clang_arg(format!("-I{}/include/sd_api_v5", ble_driver_folder()))
+        .clang_arg(format!("-I{inc_folder}/sd_api_v5"))
         .header("wrapper.h")
         .generate_comments(false)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
