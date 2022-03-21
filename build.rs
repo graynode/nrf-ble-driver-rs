@@ -6,8 +6,12 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::prelude::*;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use flate2::read::GzDecoder;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use tar::Archive;
+#[cfg(target_os = "windows")]
+use zip::read::ZipArchive;
 
 const DOWNLOAD_BASE_URL: &str = "https://github.com/NordicSemiconductor/pc-ble-driver/releases/download";
 const VERSION: &str = "4.1.4";
@@ -21,7 +25,7 @@ const FILE_SUFFIX: &str = "win_x86_64";
 #[cfg(target_os = "windows")]
 const FILE_EXT: &str = "zip";
 #[cfg(target_os = "macos")]
-const FILE_SUFFIX: &str = "macos_x86_64.tar";
+const FILE_SUFFIX: &str = "macos_x86_64";
 
 
 
@@ -75,10 +79,18 @@ fn get_nordic_ble_driver() {
     f.write_all(&buf).unwrap();
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn extract_ble_driver() {
     let out_path = PathBuf::from(format!("{}/{}", env::var("OUT_DIR").unwrap(), ble_driver_file()));
     let targ_gz = File::open(out_path).unwrap();
     let tar = GzDecoder::new(targ_gz);
     let mut archive = Archive::new(tar);
     archive.unpack(env::var("OUT_DIR").unwrap());
+}
+
+#[cfg(target_os = "windows")]
+fn extract_ble_driver() {
+    let zip_file = File::open(format!("{}/{}", env::var("OUT_DIR").unwrap(), ble_driver_file())).unwrap();
+    let mut zip = ZipArchive::new(zip_file).unwrap();
+    zip.extract(env::var("OUT_DIR").unwrap()).unwrap();
 }
