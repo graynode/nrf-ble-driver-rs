@@ -1,3 +1,5 @@
+/* 
+
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -63,6 +65,7 @@ pub fn adapter_delete(adapter: *mut adapter_t) {
 }
 
 pub fn ble_cfg_set(adapter: *mut adapter_t) -> u32 {
+    /*
     unsafe {
         let config = ble_cfg_t {
             gap_cfg: ble_gap_cfg_t {
@@ -76,5 +79,8 @@ pub fn ble_cfg_set(adapter: *mut adapter_t) -> u32 {
 
         return sd_ble_cfg_set(adapter, BLE_GAP_CFGS_BLE_GAP_CFG_ROLE_COUNT, &config, 0);
     }
+    */
+    0
 }
 
+*/

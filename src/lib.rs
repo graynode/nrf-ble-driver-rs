@@ -1,16 +1,14 @@
-
-
-
-mod api;
+mod nrf;
 mod adapter;
 mod error;
 
 
 pub use adapter::Adapter;
 pub use error::Error;
-
+pub use nrf::{ble, gap, gatt, gattc, gatts, l2cap};
 
 pub type Result<T> = std::result::Result<T, error::Error>;
+
 
 #[cfg(test)]
 mod tests {
