@@ -1,9 +1,17 @@
+use crate::{Adapter, Error, Result, GapApi};
 use nrf_ble_driver_sys::ffi::*;
-use crate::{Adapter, Error, Result};
+
+#[derive(Debug)]
+pub enum BleGapEvent {
+    Connected,
+}
 
 pub struct GapConfigRoleCount {
+    /// Maximum number of advertising sets. Default value is 1.
     pub advertising_set_count: u8,
+    /// Maximum number of connections concurrently acting as a peripheral. Default value is 1.
     pub peripheral_role_count: u8,
+    /// Maximum number of connections concurrently acting as a central. Default value is 3.
     pub central_role_count: u8,
     pub central_security_count: u8,
     pub qos_channel_survey_role_available: u8,
@@ -23,16 +31,6 @@ impl GapConfigRoleCount {
             central_role_count,
             central_security_count,
             qos_channel_survey_role_available,
-        }
-    }
-
-    pub fn default() -> GapConfigRoleCount {
-        GapConfigRoleCount {
-            advertising_set_count: 1,
-            peripheral_role_count: 0,
-            central_role_count: 1,
-            central_security_count: 0,
-            qos_channel_survey_role_available: 0,
         }
     }
 }
@@ -70,11 +68,32 @@ impl GapScanParameters {
             interval,
             window,
             timeout,
-            channel_mask
+            channel_mask,
         }
     }
 }
 
+impl Default for GapScanParameters {
+    fn default() -> Self {
+        GapScanParameters {
+            extended: 1,
+            report_incomplete_events: 0,
+            active: 0,
+            filter_policy: 0,
+            scan_phys: 1,
+            interval: 0xa0,
+            window: 0x50,
+            timeout: 0,
+            channel_mask: [0; 5],
+        }
+    }
+}
+
+
+
+
+///
+///
 pub fn set_gap_connection_config(
     adapter: &mut Adapter,
     connection_tag: u8,
@@ -140,30 +159,31 @@ pub fn set_role_count_config(adapter: &mut Adapter, config: &GapConfigRoleCount)
     }
 }
 
-pub fn scan_start(adapter: &mut Adapter, scan_parameters: &GapScanParameters) -> Result<()> {
-
-    
+pub fn scan_start(adapter: &mut adapter_t, scan_parameters: &GapScanParameters) -> Result<()> {
     let mut p_data = vec![0; BLE_GAP_SCAN_BUFFER_EXTENDED_MAX as usize].into_boxed_slice();
-    let adv_data = Box::new(ble_data_t {p_data: p_data.as_mut_ptr(), len: p_data.len() as u16});
+    let adv_data = Box::new(ble_data_t {
+        p_data: p_data.as_mut_ptr(),
+        len: p_data.len() as u16,
+    });
     std::mem::forget(p_data);
 
     let scan_params = ble_gap_scan_params_t {
         _bitfield_align_1: [0; 0],
-        _bitfield_1: ble_gap_scan_params_t::new_bitfield_1(scan_parameters.extended, 
-            scan_parameters.report_incomplete_events, 
-            scan_parameters.active, 
-            scan_parameters.filter_policy),
+        _bitfield_1: ble_gap_scan_params_t::new_bitfield_1(
+            scan_parameters.extended,
+            scan_parameters.report_incomplete_events,
+            scan_parameters.active,
+            scan_parameters.filter_policy,
+        ),
         scan_phys: scan_parameters.scan_phys,
         interval: scan_parameters.interval,
         window: scan_parameters.window,
         timeout: scan_parameters.timeout,
-        channel_mask: scan_parameters.channel_mask
+        channel_mask: scan_parameters.channel_mask,
     };
 
     unsafe {
-        let error_code = sd_ble_gap_scan_start(adapter.get_mut_handle(),
-        &scan_params,
-        &*adv_data);
+        let error_code = sd_ble_gap_scan_start(adapter, &scan_params, &*adv_data);
 
         if error_code == NRF_SUCCESS {
             Ok(())
@@ -171,5 +191,16 @@ pub fn scan_start(adapter: &mut Adapter, scan_parameters: &GapScanParameters) ->
             Err(Error::FFIError(error_code))
         }
     }
-
 }
+
+pub fn into_gap_event(event_id: u32, gap_event: ble_gap_evt_t) {
+    println!("GAP Event: {}", event_id);
+    match event_id {
+        BLE_GAP_EVTS_BLE_GAP_EVT_ADV_REPORT => unsafe {
+            println!("Address: {:?}", gap_event.params.adv_report.peer_addr.addr);
+        },
+        _ => println!("Unknown"),
+    }
+}
+
+

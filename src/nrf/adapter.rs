@@ -7,7 +7,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use crate::{Error, Result};
 use nrf_ble_driver_sys::ffi::*;
-use std::ffi::CString;
+use std::ffi::{CString, c_void};
 
 const DEFAULT_BAUDRATE: u32 = 1_000_000;
 
@@ -47,9 +47,11 @@ pub fn adapter_init(port_name: &str) -> Result<*mut adapter_t> {
 pub fn adapter_open(adapter: *mut adapter_t,
     status_handler: sd_rpc_status_handler_t,
     event_handler: sd_rpc_evt_handler_t,
-    log_handler: sd_rpc_log_handler_t) -> Result<()> {
+    log_handler: sd_rpc_log_handler_t,
+    user_data: *mut c_void) -> Result<()> {
     unsafe {
-        let error_code = sd_rpc_open(adapter, status_handler, event_handler, log_handler);
+        let error_code = sd_rpc_open(adapter, status_handler, event_handler, log_handler, user_data);
+        println!("code: {}", error_code);
         if error_code == NRF_SUCCESS {
             Ok(())
         } else {

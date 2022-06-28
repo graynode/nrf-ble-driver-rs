@@ -1,11 +1,11 @@
-mod nrf;
-mod adapter;
+
+mod sd_api_v6;
 mod error;
 
 
-pub use adapter::Adapter;
+pub use sd_api_v6::*;
 pub use error::Error;
-pub use nrf::{ble, gap, gatt, gattc, gatts, l2cap};
+
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
