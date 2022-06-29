@@ -12,3 +12,4 @@ tokio = { version = "1", features = ["full"] }
 async-trait = "0.1.52"
 bytes = "1.1.0"
 nrf-ble-driver-sys = { git = "https://github.com/graynode/nrf-ble-driver-sys", branch = "main"}
+num_enum = "0.5.7"

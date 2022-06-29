@@ -158,7 +158,7 @@ extern "C" fn sd_rpc_event_handler(adapter: *mut ffi::adapter_t, rpc_event: *mut
                 ffi::BLE_EVT_INVALID => println!("Invalid event"),
                 ffi::BLE_EVT_BASE..=ffi::BLE_EVT_LAST => println!("BLE Common Event: {}", event_id),
                 ffi::BLE_GAP_EVT_BASE..=ffi::BLE_GAP_EVT_LAST => {
-                    user_data.into_gap_event(event_id, (*rpc_event).evt.gap_evt);
+                    user_data.into_gap_event(event_id, &(*rpc_event).evt.gap_evt);
                 }
                 ffi::BLE_GATTC_EVT_BASE..=ffi::BLE_GATTC_EVT_LAST => {
                     println!("GATTC Event: {}", event_id)
