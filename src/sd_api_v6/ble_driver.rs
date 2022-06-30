@@ -1,17 +1,13 @@
-use crate::{Error, Result, sd_api_v6::*};
+use crate::gap::GapEvent;
+use crate::{sd_api_v6::*, Error, Result};
 use nrf_ble_driver_sys::ffi;
 use std::ffi::{c_void, CStr, CString};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-
 const DEFAULT_BAUDRATE: u32 = 1_000_000;
 
-
-
 unsafe impl Send for BleDriver {}
-
-
 
 impl BleDriver {
     pub fn new(port_name: &str) -> Result<BleDriver> {
@@ -72,12 +68,26 @@ impl BleDriver {
         Ok(())
     }
 
-    pub fn on_ffi_callback(&mut self, event: EventType) {
-        let _result = self.callback_event.send(event);
-    }
-
     pub async fn receive_event(&mut self) -> Option<EventType> {
         self.event_receiver.recv().await
+    }
+
+    pub fn handle_ffi_event(&mut self, ble_event: *mut ffi::ble_evt_t) {
+        unsafe {
+            let event_id: u32 = (*ble_event).header.evt_id.into();
+
+            let event = match event_id {
+                ffi::BLE_EVT_INVALID => EventType::Invalid,
+                id@ ffi::BLE_EVT_BASE..=ffi::BLE_EVT_LAST => EventType::BleCommon(id),
+                id@ffi::BLE_GAP_EVT_BASE..=ffi::BLE_GAP_EVT_LAST => EventType::BleGap(self.handle_gap_event(id, &(*ble_event).evt.gap_evt)),
+                id@ffi::BLE_GATTC_EVT_BASE..=ffi::BLE_GATTC_EVT_LAST => EventType::BleGattClient(id),
+                id@ffi::BLE_GATTS_EVT_BASE..=ffi::BLE_GATTS_EVT_LAST => EventType::BleGattServer(id),
+                id@ffi::BLE_L2CAP_EVT_BASE..=ffi::BLE_L2CAP_EVT_LAST => EventType::BleL2cap(id),
+                id => EventType::Unknown(id),
+            };
+
+            let _result = self.callback_event.send(event);
+        }
     }
 
     fn adapter_init(port_name: &str) -> Result<*mut ffi::adapter_t> {
@@ -112,9 +122,6 @@ impl BleDriver {
             Ok(adapter)
         }
     }
-
-    
-
 }
 
 impl Drop for BleDriver {
@@ -134,6 +141,7 @@ extern "C" fn sd_rpc_status_handler(
     code: ffi::sd_rpc_app_status_t,
     message: *const ::std::os::raw::c_char,
 ) {
+    /*
     unsafe {
         if !(*adapter).user_data.is_null() {
             let message = CStr::from_ptr(message);
@@ -144,34 +152,14 @@ extern "C" fn sd_rpc_status_handler(
             ));
         }
     }
+    */
 }
 
 extern "C" fn sd_rpc_event_handler(adapter: *mut ffi::adapter_t, rpc_event: *mut ffi::ble_evt_t) {
-    let mut event = EventType::Unknown(0);
-
     unsafe {
-        let event_id: u32 = (*rpc_event).header.evt_id.into();
         if !(*adapter).user_data.is_null() {
             let user_data: &mut BleDriver = &mut *((*adapter).user_data as *mut BleDriver);
-
-            match event_id {
-                ffi::BLE_EVT_INVALID => println!("Invalid event"),
-                ffi::BLE_EVT_BASE..=ffi::BLE_EVT_LAST => println!("BLE Common Event: {}", event_id),
-                ffi::BLE_GAP_EVT_BASE..=ffi::BLE_GAP_EVT_LAST => {
-                    user_data.into_gap_event(event_id, &(*rpc_event).evt.gap_evt);
-                }
-                ffi::BLE_GATTC_EVT_BASE..=ffi::BLE_GATTC_EVT_LAST => {
-                    println!("GATTC Event: {}", event_id)
-                }
-                ffi::BLE_GATTS_EVT_BASE..=ffi::BLE_GATTS_EVT_LAST => {
-                    println!("GATTS Event: {}", event_id)
-                }
-                ffi::BLE_L2CAP_EVT_BASE..=ffi::BLE_L2CAP_EVT_LAST => {
-                    println!("L2CAP Event: {}", event_id)
-                }
-                _ => event = EventType::Unknown(event_id),
-            }
-            user_data.on_ffi_callback(event);
+            user_data.handle_ffi_event(rpc_event);
         }
     }
 }

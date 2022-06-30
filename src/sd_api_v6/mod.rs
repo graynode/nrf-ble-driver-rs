@@ -9,6 +9,8 @@ pub mod gatts;
 use nrf_ble_driver_sys::ffi;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use self::gap::GapEvent;
+
 
 
 
@@ -24,12 +26,13 @@ pub struct BleDriver {
 
 #[derive(Debug)]
 pub enum EventType {
-    Unknown(u32),
     RpcLog(i32, String),
     RpcStatus(i32, String),
-    BleCommon(u16),
-    BleGap(u16),
-    BleGattClient(u16),
-    BleGattServer(u16),
-    BleL2cap(u16),
+    BleCommon(u32),
+    BleGap(GapEvent),
+    BleGattClient(u32),
+    BleGattServer(u32),
+    BleL2cap(u32),
+    Unknown(u32),
+    Invalid,
 }

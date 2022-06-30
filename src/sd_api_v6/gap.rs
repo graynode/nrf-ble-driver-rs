@@ -1,12 +1,36 @@
 use crate::{sd_api_v6::BleDriver, Error, Result};
 use nrf_ble_driver_sys::ffi;
-use std::ptr;
+use std::{ptr, slice, result};
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 
+
 #[derive(Debug)]
-pub enum BleGapEvent {
-    Connected,
+pub enum GapEvent {
+    Connect,
+    Disconnect,
+    ConnectionParametersUpdate,
+    SecurityParametersRequest,
+    SecurityInformationRequest,
+    PassKeyDisplay,
+    KeyPress,
+    AuthenticationKeyRequest,
+    LESecureKeyDiffieHellmanKeyRequest,
+    AuthenticationStatus,
+    ConnectionSecurityUpdate,
+    Timeout,
+    RSSIChanged,
+    AdvertisingReport(GapAdvertisementReport),
+    SecurityRequest,
+    ConnectionParameterUpdateRequest,
+    ScanRequestReport,
+    PhyUpdateRequest,
+    PhyUpdate,
+    DataLengthUpdateRequest,
+    DataLengthUpdate,
+    QOSChannelSurveyReport,
+    AdvertisingSetTerminated,
+    Unknown(u32),
 }
 
 pub struct GapConfigRoleCount {
@@ -150,6 +174,7 @@ pub enum GapSetId {
     NotAvailable,
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum AdvertisingDataType {
     Flags = ffi::BLE_GAP_AD_TYPE_FLAGS as u8,
@@ -161,7 +186,31 @@ pub enum AdvertisingDataType {
     ServiceUUIDComplete128Bit = ffi::BLE_GAP_AD_TYPE_128BIT_SERVICE_UUID_COMPLETE as u8,
     ShortLocalName = ffi::BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME as u8,
     CompleteLocalName = ffi::BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME as u8,
-    TxPowerLevel = ffi::BLE_GAP_AD_TYPE_TX_POWER_LEVEL as u8
+    TxPowerLevel = ffi::BLE_GAP_AD_TYPE_TX_POWER_LEVEL as u8,
+    ClassOfDevice = ffi::BLE_GAP_AD_TYPE_CLASS_OF_DEVICE as u8,
+    SimplePairingHashC = ffi::BLE_GAP_AD_TYPE_SIMPLE_PAIRING_HASH_C as u8,
+    SimpleRandomizerR = ffi::BLE_GAP_AD_TYPE_SIMPLE_PAIRING_RANDOMIZER_R as u8,
+    SecurityManagerTKValue = ffi::BLE_GAP_AD_TYPE_SECURITY_MANAGER_TK_VALUE as u8,
+    SecurityManagerOOBFlags = ffi::BLE_GAP_AD_TYPE_SECURITY_MANAGER_OOB_FLAGS as u8,
+    PeripheralConnectionIntervalRange = ffi::BLE_GAP_AD_TYPE_SLAVE_CONNECTION_INTERVAL_RANGE as u8,
+    SolicitedServiceUUIDS16Bit = ffi::BLE_GAP_AD_TYPE_SOLICITED_SERVICE_UUIDS_16BIT as u8,
+    SolicitedServiceUUIDS128Bit = ffi::BLE_GAP_AD_TYPE_SOLICITED_SERVICE_UUIDS_128BIT as u8,
+    ServiceData = ffi::BLE_GAP_AD_TYPE_SERVICE_DATA as u8,
+    PublicTargetAddress = ffi::BLE_GAP_AD_TYPE_PUBLIC_TARGET_ADDRESS as u8,
+    RandomTargetAddress = ffi::BLE_GAP_AD_TYPE_RANDOM_TARGET_ADDRESS as u8,
+    Appearance = ffi::BLE_GAP_AD_TYPE_APPEARANCE as u8,
+    AdvertisingInterval = ffi::BLE_GAP_AD_TYPE_ADVERTISING_INTERVAL as u8,
+    LEBluetoothDeviceAddress = ffi::BLE_GAP_AD_TYPE_LE_BLUETOOTH_DEVICE_ADDRESS as u8,
+    LERole = ffi::BLE_GAP_AD_TYPE_LE_ROLE as u8,
+    SimplePairingHashC256 = ffi::BLE_GAP_AD_TYPE_SIMPLE_PAIRING_HASH_C256 as u8,
+    SimplePairingRandomizerR256 = ffi::BLE_GAP_AD_TYPE_SIMPLE_PAIRING_RANDOMIZER_R256 as u8,
+    ServiceData32BitUUID = ffi::BLE_GAP_AD_TYPE_SERVICE_DATA_32BIT_UUID as u8,
+    ServiceData128BitUUID = ffi::BLE_GAP_AD_TYPE_SERVICE_DATA_128BIT_UUID as u8,
+    LESecureConnectionConfirmationValue = ffi::BLE_GAP_AD_TYPE_LESC_CONFIRMATION_VALUE as u8,
+    LESecureConnectionRandomValue = ffi::BLE_GAP_AD_TYPE_LESC_RANDOM_VALUE as u8,
+    URI = ffi::BLE_GAP_AD_TYPE_URI as u8,
+    InformationData3D = ffi::BLE_GAP_AD_TYPE_3D_INFORMATION_DATA as u8,
+    ManufacturerSpecificData = ffi::BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA as u8,
 }
 
 #[derive(Debug)]
@@ -175,6 +224,7 @@ pub struct GapAdvertisementReport {
     pub rssi: i8,
     pub channel_index: u8,
     pub set_id: GapSetId,
+    pub data: Vec<u8>,
 }
 
 impl BleDriver {
@@ -281,22 +331,28 @@ impl BleDriver {
         }
     }
 
-    pub fn into_gap_event(&mut self, event_id: u32, gap_event: &ffi::ble_gap_evt_t) {
-        match event_id {
-            ffi::BLE_GAP_EVTS_BLE_GAP_EVT_ADV_REPORT => unsafe {
-                let report = GapAdvertisementReport::from(&gap_event.params.adv_report);
-                println!("{:?}", report);
-                if self.is_scanning {
-                    self.gap_scan_start(&GapScanParameters::default()).unwrap();
+    pub fn handle_gap_event(&mut self, event_id: u32, gap_event: &ffi::ble_gap_evt_t) -> GapEvent {
+        unsafe {
+            let event = match event_id {
+                ffi::BLE_GAP_EVTS_BLE_GAP_EVT_ADV_REPORT => {
+                    if self.is_scanning {
+                        self.gap_scan_start(&GapScanParameters::default()).unwrap();
+                    }
+                    GapEvent::AdvertisingReport(GapAdvertisementReport::from_ffi(&gap_event.params.adv_report))
                 }
-            }
-            event => println!("Not handled: {}", event),
+                id => GapEvent::Unknown(id)
+
+            };
+
+            event
         }
     }
+
+    
 }
 
 impl GapAdvertisementReport {
-    fn from(adv_report: &ffi::ble_gap_evt_adv_report_t) -> GapAdvertisementReport {
+    fn from_ffi(adv_report: &ffi::ble_gap_evt_adv_report_t) -> GapAdvertisementReport {
         //let primary_phy = GapPhy::try_from(adv_report.primary_phy as u32);
         
         let tx_power = if adv_report.tx_power == ffi::BLE_GAP_POWER_LEVEL_INVALID as i8 {
@@ -309,6 +365,11 @@ impl GapAdvertisementReport {
             ffi::BLE_GAP_ADV_REPORT_SET_ID_NOT_AVAILABLE => GapSetId::NotAvailable,
             id => GapSetId::Value(id as u8),
         };
+
+        let mut data = Vec::new();
+        unsafe {
+            data = slice::from_raw_parts(adv_report.data.p_data, adv_report.data.len as usize).to_vec();
+        }
     
         GapAdvertisementReport {
             peer_address: GapAddress::from(&adv_report.peer_addr),
@@ -319,7 +380,9 @@ impl GapAdvertisementReport {
             rssi: adv_report.rssi,
             channel_index: adv_report.ch_index,
             set_id,
+            data
         }
+
     }
 }
 
@@ -345,3 +408,9 @@ impl GapAddress {
     }
 }
 
+fn check_name(data: &ffi::ble_data_t) {
+    unsafe {
+        let safe_data = slice::from_raw_parts(data.p_data, data.len as usize).to_vec();
+        println!("{:X?}", safe_data);
+    }
+}
