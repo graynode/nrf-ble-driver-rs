@@ -12,6 +12,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use self::gap::GapEvent;
 
 
+pub type BluetoothAddress = [u8; 6];
 
 
 #[derive(Debug)]

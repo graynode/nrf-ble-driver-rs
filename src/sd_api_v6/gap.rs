@@ -1,6 +1,6 @@
-use crate::{sd_api_v6::BleDriver, Error, Result};
+use crate::{sd_api_v6::BleDriver, Error, Result, BluetoothAddress};
 use nrf_ble_driver_sys::ffi;
-use std::{ptr, slice, result};
+use std::{ptr, slice, result, str, clone};
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 
@@ -80,7 +80,6 @@ pub struct GapScanParameters {
     /// on secondary advertising channels, and will not be able
     /// to receive long advertising PDUs.
     pub extended: u8,
-    pub report_incomplete_events: u8,
     pub active: u8,
     pub filter_policy: u8,
     pub scan_phys: u8,
@@ -93,7 +92,6 @@ pub struct GapScanParameters {
 impl GapScanParameters {
     pub fn new(
         extended: u8,
-        report_incomplete_events: u8,
         active: u8,
         filter_policy: u8,
         scan_phys: u8,
@@ -104,7 +102,6 @@ impl GapScanParameters {
     ) -> GapScanParameters {
         GapScanParameters {
             extended,
-            report_incomplete_events,
             active,
             filter_policy,
             scan_phys,
@@ -120,19 +117,18 @@ impl Default for GapScanParameters {
     fn default() -> Self {
         GapScanParameters {
             extended: 1,
-            report_incomplete_events: 0,
-            active: 0,
-            filter_policy: 0,
-            scan_phys: 1,
+            active: 1,
+            filter_policy: ffi::BLE_GAP_SCAN_FP_ACCEPT_ALL as u8,
+            scan_phys: ffi::BLE_GAP_PHY_AUTO as u8,
             interval: 0xa0,
-            window: 0x50,
+            window: 50,
             timeout: 0,
             channel_mask: [0; 5],
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum GapAddressType {
     Public,
     RandomStatic,
@@ -142,14 +138,14 @@ pub enum GapAddressType {
     Unknown(u8),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct GapAddress {
     pub address_id_peer: bool,
     pub address_type: GapAddressType,
-    pub address: [u8; 6],
+    pub address: BluetoothAddress,
 }
 
-#[derive(Debug, TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u32)]
 pub enum GapPhy {
     Auto = ffi::BLE_GAP_PHY_AUTO,
@@ -161,20 +157,20 @@ pub enum GapPhy {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum TxPowerLevel {
     Value(i8),
     Invalid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum GapSetId {
     Value(u8),
     NotAvailable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 pub enum AdvertisingDataType {
     Flags = ffi::BLE_GAP_AD_TYPE_FLAGS as u8,
@@ -213,7 +209,9 @@ pub enum AdvertisingDataType {
     ManufacturerSpecificData = ffi::BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA as u8,
 }
 
-#[derive(Debug)]
+
+
+#[derive(Debug, Clone)]
 pub struct GapAdvertisementReport {
     //pub report type
     pub peer_address: GapAddress,
@@ -294,7 +292,7 @@ impl BleDriver {
     }
 
     pub fn gap_scan_start(&mut self, scan_parameters: &GapScanParameters) -> Result<()> {
-        let mut error_code = ffi::NRF_SUCCESS;
+        let error_code;
 
         if self.is_scanning {
             let scan_params: *const ffi::ble_gap_scan_params_t = ptr::null();
@@ -306,7 +304,7 @@ impl BleDriver {
                 _bitfield_align_1: [0; 0],
                 _bitfield_1: ffi::ble_gap_scan_params_t::new_bitfield_1(
                     scan_parameters.extended,
-                    scan_parameters.report_incomplete_events,
+                    0, // not supported in this softdevice
                     scan_parameters.active,
                     scan_parameters.filter_policy,
                 ),
@@ -352,6 +350,27 @@ impl BleDriver {
 }
 
 impl GapAdvertisementReport {
+
+    pub fn find_ad_data(advertisement: &GapAdvertisementReport, adtype: AdvertisingDataType) -> Option<Vec<u8>> {
+        let mut index = 0;
+        //println!("{:X?}", advertisement.data);
+
+        while index < advertisement.data.len() {
+            let length = advertisement.data[index] as usize;
+            let ad_type = advertisement.data[index + 1];
+
+            //println!("length: {}, index: {}", length, index);
+
+            if ad_type == adtype as u8 {
+                return Some(advertisement.data[index + 2..index + length + 1].to_vec());
+            }
+
+            index += length + 1;
+        }
+
+        None
+    }
+
     fn from_ffi(adv_report: &ffi::ble_gap_evt_adv_report_t) -> GapAdvertisementReport {
         //let primary_phy = GapPhy::try_from(adv_report.primary_phy as u32);
         
@@ -366,7 +385,7 @@ impl GapAdvertisementReport {
             id => GapSetId::Value(id as u8),
         };
 
-        let mut data = Vec::new();
+        let data;
         unsafe {
             data = slice::from_raw_parts(adv_report.data.p_data, adv_report.data.len as usize).to_vec();
         }
