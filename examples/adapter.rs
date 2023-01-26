@@ -1,3 +1,4 @@
+
 use nrf_sd_api::{BleDriver, EventType, gap::*, BluetoothAddress};
 use std::{collections::HashMap, hash::Hash};
 
