@@ -3,7 +3,7 @@ use crate::transport::slip;
 use crate::{Error, Result};
 
 use futures::stream::StreamExt;
-use tokio_serial::{SerialPortBuilder, SerialStream, SerialPortBuilderExt};
+use tokio_serial::{SerialPortBuilder, SerialStream, SerialPortBuilderExt, SerialPortType};
 use tokio_util::codec::{Encoder, Decoder, Framed};
 use bytes::{BytesMut, Bytes, BufMut, Buf};
 use std::{io, env};
@@ -16,6 +16,9 @@ const DEFAULT_BAUDRATE: u32 = 1_000_000;
 const DEFAULT_TTY: &str = "/dev/ttyACM0";
 #[cfg(windows)]
 const DEFAULT_TTY: &str = "COM1";
+
+const NORDIC_USB_VID: u16 = 0x1915;
+const NORDIC_USB_PID: u16 = 0xC00A;
 
 struct PacketCodec;
 
@@ -51,6 +54,25 @@ impl SerialTransport {
         } else {
             None
         }
+    }
+
+    pub fn available_ports() -> Vec<String> {
+        let mut result = Vec::new();
+        if let Ok(ports) = tokio_serial::available_ports()  {
+            for port in ports {
+                match (port.port_type) {
+                    SerialPortType::UsbPort(port_info) => {
+                        if port_info.vid == NORDIC_USB_VID && port_info.pid == NORDIC_USB_PID {
+                            result.push(port.port_name);
+                        }
+                    },
+                    SerialPortType::PciPort => { println!("PciPort")},
+                    SerialPortType::BluetoothPort => { println!("BluetoothPort")},
+                    SerialPortType::Unknown => { result.push(port.port_name)},
+                }
+            }
+        }
+        result
     }
 }
 

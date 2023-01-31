@@ -17,6 +17,10 @@ const PAYLOAD_LENGTH_FIRST_NIBBLE_MASK: u8 = 0x0F;
 const PAYLOAD_LENGTH_SECOND_NIBBLE_MASK: u16 = 0x0FF0;
 const PAYLOAD_LENGTH_OFFSET: u8 = 4;
 
+pub struct UartHciTransport {
+    
+}
+
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 #[repr(u8)]
 enum H5PacketType {
@@ -125,7 +129,13 @@ impl H5Packet {
         }
 
         if crc_present {
-            // calc checksum here and error out 
+            let packet_checksum = ((data[payload_length + H5_HEADER_LENGTH] as u16) + 
+                                      ((data[payload_length + H5_HEADER_LENGTH + 1] as u16) << 8)) as u16;
+            let calculated_checksum = H5Packet::calc_crc16_checksum(&data[..payload_length + H5_HEADER_LENGTH]);
+            
+            if packet_checksum != calculated_checksum {
+                return Err(Error::H5Error);
+            }
         }
 
         Ok(H5Packet { seq_number: data[0] & SEQ_NUMBER_MASK,
@@ -146,6 +156,20 @@ impl H5Packet {
         checksum &= 0xFF;
         checksum = !checksum + 1;
         return checksum as u8;
+    }
+
+    fn calc_crc16_checksum(data: &[u8]) -> u16 {
+        let mut crc = u16::MAX;
+
+        for byte in data {
+            crc = crc >> 8 | crc << 8;
+            crc ^= (*byte) as u16;
+            crc ^= crc & 0xff >> 4;
+            crc ^= crc << 12;
+            crc ^= crc & 0xff << 5;
+        }
+
+        crc
     }
 }
 
