@@ -62,6 +62,7 @@ impl SerialTransport {
             for port in ports {
                 match (port.port_type) {
                     SerialPortType::UsbPort(port_info) => {
+                        println!("UspPort");
                         if port_info.vid == NORDIC_USB_VID && port_info.pid == NORDIC_USB_PID {
                             result.push(port.port_name);
                         }
